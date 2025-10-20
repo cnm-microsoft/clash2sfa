@@ -1,282 +1,295 @@
 {
   "log": {
-    "level": "info"
+    "level": "info",
+    "output": "box.log"
   },
   "dns": {
     "servers": [
       {
-        "tag": "local",
+        "type": "fakeip",
+        "tag": "fakeip",
+        "inet4_range": "198.18.0.0/15"
+      },
+      {
+        "type": "https",
+        "tag": "Local-DNS",
+        "domain_resolver": "Local-DNS-Resolver",
+        "server": "223.5.5.5",
+        "server_port": 443,
+        "path": "/dns-query"
+      },
+      {
         "type": "udp",
-        "server": "223.5.5.5"
+        "tag": "Local-DNS-Resolver",
+        "server": "223.5.5.5",
+        "server_port": 53
       },
       {
-        "tag": "google",
         "type": "https",
-        "server": "8.8.8.8"
+        "tag": "Remote-DNS",
+        "domain_resolver": "Remote-DNS-Resolver",
+        "server": "hk.alpha.abrdns.com",
+        "server_port": 443,
+        "path": "/dohgo#ecs=47.76.112.0/24"
       },
       {
-        "tag": "alidns",
-        "type": "https",
-        "server": "dns.alidns.com",
-        "domain_resolver": "local"
-      },
-      {
-        "tag": "doh-pub",
-        "type": "https",
-        "server": "doh.pub",
-        "domain_resolver": "local"
+        "type": "hosts",
+        "tag": "Remote-DNS-Resolver",
+        "predefined": {
+          "hk.alpha.abrdns.com": "47.83.163.39"
+        }
       }
     ],
     "rules": [
       {
-        "rule_set": [
-          "LoyalDirect",
-          "LoyalLanCIDR"
-        ],
-        "server": "alidns"
+        "query_type": "A",
+        "server": "fakeip"
       },
       {
-        "rule_set": [
-          "ProxyGFWlist"
-        ],
-        "server": "google"
+        "clash_mode": "direct",
+        "server": "Local-DNS"
+      },
+      {
+        "clash_mode": "global",
+        "server": "Remote-DNS"
+      },
+      {
+        "rule_set": "GeoSite-CN",
+        "server": "Local-DNS"
+      },
+      {
+        "rule_set": "GeoLocation-!CN",
+        "server": "Remote-DNS"
       }
     ],
-    "final": "google",
-    "strategy": "ipv4_only",
-    "disable_cache": false,
-    "disable_expire": false,
-    "independent_cache": true,
-    "client_subnet": "0.0.0.0/0"
+    "final": "Local-DNS",
+    "strategy": "ipv4_only"
   },
+  "endpoints": [
+    {
+      "type": "tailscale",
+      "tag": "ts-ep",
+      "accept_routes": true,
+      "udp_timeout": "5s"
+    }
+  ],
   "inbounds": [
     {
       "type": "mixed",
       "tag": "mixed-in",
-      "listen": "0.0.0.0",
-      "listen_port": 7890
+      "listen": "127.0.0.1",
+      "listen_port": 20122,
+      "tcp_fast_open": true,
+      "tcp_multi_path": true,
+      "udp_fragment": false
+    },
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "mtu": 1500,
+      "address": "172.18.0.1/30",
+      "auto_route": true,
+      "strict_route": true,
+      "stack": "gvisor"
     }
   ],
   "outbounds": [
-    {
-      "type": "direct",
-      "tag": "DIRECT"
-    },
-    {
-      "type": "block",
-      "tag": "REJECT"
-    },
     {
       "type": "selector",
       "tag": "✈️ ‍起飞",
       "outbounds": [
         "⚡ ‍低延迟",
-        "🔧 ‍自建",
-        "👆🏻 指定",
-        "DIRECT"
-      ]
+        "GLOBAL",
+        "🎯 全球直连",
+        "👆🏻 指定"
+      ],
+      "interrupt_exist_connections": true
     },
     {
       "type": "urltest",
       "tag": "⚡ ‍低延迟",
       "outbounds": [
-        "🔧 ‍自建",
-        "👆🏻 指定"
+        
       ],
       "url": "https://www.gstatic.com/generate_204",
-      "interval": "5m",
-      "tolerance": 100,
-      "idle_timeout": "30m"
+      "interval": "3m0s",
+      "tolerance": 150,
+      "interrupt_exist_connections": true
     },
     {
       "type": "selector",
       "tag": "👆🏻 指定",
       "outbounds": [
-        "DIRECT"
-      ]
-    },
-    {
-      "type": "selector",
-      "tag": "🔧 ‍自建",
-      "outbounds": [
-        "DIRECT"
-      ]
-    },
-    {
-      "type": "selector",
-      "tag": "🛩️ ‍墙内",
-      "outbounds": [
-        "DIRECT",
-        "REJECT"
-      ]
-    },
-    {
-      "type": "selector",
-      "tag": "💩 ‍广告",
-      "outbounds": [
-        "REJECT",
-        "DIRECT"
-      ]
+        
+      ],
+      "interrupt_exist_connections": true
     },
     {
       "type": "selector",
       "tag": "🤖 ‍AI",
       "outbounds": [
-        "DIRECT"
-      ]
+        "美西CN2【2x】"
+      ],
+      "interrupt_exist_connections": true
     },
     {
       "type": "selector",
-      "tag": "🌐 ‍未知站点",
+      "tag": "🏠home",
       "outbounds": [
-        "✈️ ‍起飞",
-        "🛩️ ‍墙内"
-      ]
+        "ts-ep",
+        "🎯 全球直连"
+      ],
+      "interrupt_exist_connections": true
+    },
+    {
+      "type": "direct",
+      "tag": "🎯 全球直连"
+    },
+    {
+      "type": "selector",
+      "tag": "GLOBAL",
+      "outbounds": [
+        
+      ],
+      "interrupt_exist_connections": true
     }
   ],
   "route": {
     "rules": [
       {
-        "inbound": "mixed-in",
+        "inbound": "tun-in",
         "action": "sniff"
       },
       {
-        "domain_suffix": [
-          "040726.xyz",
-          "nzh-nas.top",
-          "nzh-nas.me",
-          "uk.nzh-cloud.me",
-          "api.qnaigc.com",
-          "bing.com"
-        ],
-        "outbound": "DIRECT"
+        "protocol": "dns",
+        "action": "hijack-dns"
       },
       {
-        "rule_set": [
-          "reject",
-          "AD"
-        ],
-        "outbound": "💩 ‍广告"
+        "clash_mode": "direct",
+        "outbound": "🎯 全球直连"
       },
       {
-        "rule_set": [
-          "LoyalDirect",
-          "LoyalLanCIDR",
-          "LoyalCnCIDR",
-          "applications"
-        ],
-        "outbound": "DIRECT"
+        "clash_mode": "global",
+        "outbound": "GLOBAL"
       },
       {
-        "ip_is_private": true,
-        "outbound": "DIRECT"
+        "rule_set": "Category-Ads",
+        "action": "reject"
       },
       {
-        "rule_set": [
-          "LoyalCnCIDR"
-        ],
-        "outbound": "DIRECT"
+        "rule_set": "AWAvenue-Ads-Rule",
+        "action": "reject"
       },
       {
-        "domain_suffix": [
-          "api.iturrit.com",
-          "www.lxc.wiki"
-        ],
+        "ip_cidr": "47.83.163.39/32",
+        "outbound": "🎯 全球直连"
+      },
+      {
+        "ip_cidr": "192.168.31.0/24",
+        "outbound": "🏠home"
+      },
+      {
+        "domain_suffix": "emby.hohai.eu.org",
         "outbound": "✈️ ‍起飞"
       },
       {
-        "rule_set": [
-          "ProxyGFWlist"
-        ],
-        "outbound": "✈️ ‍起飞"
+        "domain_suffix": "lobe.com",
+        "outbound": "🎯 全球直连"
       },
       {
         "rule_set": [
-          "AI"
+          "GeoIP-Private",
+          "GeoSite-CN",
+          "GeoIP-CN"
         ],
+        "outbound": "🎯 全球直连"
+      },
+      {
+        "rule_set": "AI",
         "outbound": "🤖 ‍AI"
+      },
+      {
+        "rule_set": "telegram",
+        "outbound": "✈️ ‍起飞"
+      },
+      {
+        "rule_set": "GeoLocation-!CN",
+        "outbound": "✈️ ‍起飞"
       }
     ],
-    "final": "🌐 ‍未知站点",
-    "auto_detect_interface": true,
     "rule_set": [
       {
-        "tag": "reject",
         "type": "remote",
-        "format": "source",
-        "url": "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt",
-        "download_detour": "DIRECT",
-        "update_interval": "1d"
-      },
-      {
-        "tag": "AD",
-        "type": "remote",
-        "format": "source",
-        "url": "https://script.cx.ms/awavenue/AWAvenue-Ads-Rule-Clash.yaml",
-        "download_detour": "DIRECT",
-        "update_interval": "1d"
-      },
-      {
-        "tag": "LoyalDirect",
-        "type": "remote",
-        "format": "source",
-        "url": "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt",
-        "download_detour": "DIRECT",
-        "update_interval": "1d"
-      },
-      {
-        "tag": "LoyalLanCIDR",
-        "type": "remote",
-        "format": "source",
-        "url": "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/lancidr.txt",
-        "download_detour": "DIRECT",
-        "update_interval": "1d"
-      },
-      {
-        "tag": "LoyalCnCIDR",
-        "type": "remote",
-        "format": "source",
-        "url": "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/cncidr.txt",
-        "download_detour": "DIRECT",
-        "update_interval": "1d"
-      },
-      {
-        "tag": "applications",
-        "type": "remote",
-        "format": "source",
-        "url": "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/applications.txt",
-        "download_detour": "DIRECT",
-        "update_interval": "1d"
-      },
-      {
-        "tag": "ProxyGFWlist",
-        "type": "remote",
-        "format": "source",
-        "url": "https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/gfw.txt",
-        "download_detour": "DIRECT",
-        "update_interval": "1d"
-      },
-      {
         "tag": "AI",
+        "url": "https://wget.la/https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ai-!cn.srs",
+        "download_detour": "🎯 全球直连"
+      },
+      {
         "type": "remote",
-        "format": "source",
-        "url": "https://fastly.jsdelivr.net/gh/ACL4SSR/ACL4SSR@master/Clash/Providers/Ruleset/Gemini.yaml",
-        "download_detour": "DIRECT",
-        "update_interval": "1d"
+        "tag": "AWAvenue-Ads-Rule",
+        "url": "https://github.boki.moe/https://raw.githubusercontent.com/cnm-microsoft/AWAvenue-Ads-Rule/refs/heads/main/Filters/AWAvenue-Ads-Rule-Singbox.srs",
+        "download_detour": "🎯 全球直连"
+      },
+      {
+        "type": "remote",
+        "tag": "Category-Ads",
+        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/category-ads-all.srs",
+        "download_detour": "🎯 全球直连"
+      },
+      {
+        "type": "remote",
+        "tag": "GeoIP-Private",
+        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/private.srs",
+        "download_detour": "🎯 全球直连"
+      },
+      {
+        "type": "remote",
+        "tag": "GeoSite-Private",
+        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/private.srs",
+        "download_detour": "🎯 全球直连"
+      },
+      {
+        "type": "remote",
+        "tag": "GeoIP-CN",
+        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geoip/cn.srs",
+        "download_detour": "🎯 全球直连"
+      },
+      {
+        "type": "remote",
+        "tag": "GeoSite-CN",
+        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/cn.srs",
+        "download_detour": "🎯 全球直连"
+      },
+      {
+        "type": "remote",
+        "tag": "telegram",
+        "url": "https://xget.xi-xu.me/gh/Loyalsoldier/geoip/raw/refs/heads/release/srs/telegram.srs",
+        "download_detour": "🎯 全球直连"
+      },
+      {
+        "type": "remote",
+        "tag": "GeoLocation-!CN",
+        "url": "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@sing/geo/geosite/geolocation-!cn.srs",
+        "download_detour": "🎯 全球直连"
       }
-    ]
+    ],
+    "final": "✈️ ‍起飞",
+    "auto_detect_interface": true,
+    "default_domain_resolver": "Local-DNS"
   },
   "experimental": {
     "cache_file": {
       "enabled": true,
       "path": "cache.db",
-      "store_fakeip": true
+      "store_fakeip": true,
+      "store_rdrc": true,
+      "rdrc_timeout": "24h0m0s"
     },
     "clash_api": {
-      "external_controller": "0.0.0.0:9090",
-      "external_ui": "ui",
-      "secret": "",
-      "default_mode": "rule"
+      "external_controller": "127.0.0.1:9090",
+      "external_ui": "zashboard",
+      "external_ui_download_url": "https://github.com/Zephyruso/zashboard/releases/download/v1.107.0/dist.zip",
+      "external_ui_download_detour": "✈️ ‍起飞"
     }
   }
 }
